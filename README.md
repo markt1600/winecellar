@@ -1,6 +1,6 @@
 # The Cellar
 
-Private environmental journal at https://winecellar.marktan.ai. Raspberry Pi Zero 2 W reads a DS18B20 on GPIO4 and a DHT22 on GPIO22. No faces or video are collected by this version.
+Private environmental journal at https://winecellar.marktan.ai. Raspberry Pi Zero 2 W reads a DS18B20 on GPIO4 and a DHT22 on GPIO22. Motion video stays in private storage. No face detection or extraction is performed.
 
 ## Running system
 
@@ -22,8 +22,22 @@ The Pi signs each upload using Ed25519. Its private key lives only in `~/winecel
 
 Current bottle/ambient temperature and humidity; rolling 24h and all-time extremes; selectable 1h, 24h, one calendar month and one calendar year; exact selected-period extremes/times and sample means. Charts use 10s, 120s, 1h and 1-day buckets respectively, retaining min/max whiskers. The CSV exports these chart buckets (not every raw sample). Charts do not interpolate missing buckets; a partially populated bucket averages only its valid readings. Humidity is separate from temperature. Estimated dew point and bottle-air difference are shown. Configurable display ranges are browser-local illustrative values, not alerts or storage advice. Historical data accrues from installation onward; missing history is never fabricated.
 
-Motion capture, LCD rendering, alerts and richer duration-based excursion analysis are later hardware/integration stages, not active in this release. Raw data is preserved to support them.
+LCD rendering, alerts and richer duration-based excursion analysis remain later integration stages. Raw sensor data is preserved to support them.
 
 ## Development
 
 Node 22+: `npm ci`, `npm test`, `npm run build`. Deploy the connected main branch to Vercel using the Next.js framework. Do not commit readings, credentials, keys or recordings. Test Python snapshots with `python -m unittest discover -s tests -p 'test_*.py'`.
+
+## Motion camera
+
+Install `ffmpeg` from Raspberry Pi OS apt. The recorder uses the already-installed `rpicam-vid` native `motion_detect` stage on a 128x96 stream, comparing subsampled luminance pixels at 3 Hz. H264 is hardware encoded at 1280x720, 15 fps, target 800 kbit/s. This is pixel-change detection, not person recognition: lights, shadows and camera movement can trigger it. Adjust `~/winecellar/camera/motion.json` and restart the camera service after positioning it.
+
+`winecellar-camera.service` records one-second, independently decodable H264 segments into the user's RAM-backed runtime directory. Only motion clips reach the SD card. Clips include at least five seconds before a trigger (once the startup buffer fills), and five seconds after motion stops. Segment boundaries may add roughly one or two seconds. Persistent activity splits into approximately 20-second overlapping clips, preserving coverage. The first eight seconds after start are an exposure/buffer warmup.
+
+`winecellar-clips.service` packages with FFmpeg stream copy (no video re-encoding) and uploads signed binary envelopes. The server stores immutable MP4 and metadata objects in private Blob; it verifies the same device signature as sensor uploads. Video listing and playback require the shared owner login, and byte ranges are streamed through the authenticated server. Videos are not stored in GitHub. Cloud clips currently have no automatic expiry.
+
+Local queue: `~/winecellar/camera/spool`. Pending footage is retained across upload outages; local files are removed only after a durable server acknowledgement. At 512 MiB of spool or under 1 GiB disk free, new event recording pauses so temperature logging retains space. Camera capture stops at 78 C Pi temperature and systemd retries later. Services run at lower priority with CPU and memory caps. Interrupted partial clips are not presented as complete footage.
+
+Install both user service files, then `systemctl --user daemon-reload` and `systemctl --user enable --now winecellar-camera winecellar-clips`. Stop with `systemctl --user stop winecellar-camera winecellar-clips`. `data/camera-status.json` and `data/camera-upload-status.json` report capture/queue/cloud health, and sensor snapshots carry these statuses to the dashboard.
+
+A software-triggered setup clip can be requested with `touch ~/winecellar/camera/test-trigger`. These are explicitly labelled "Setup test", not motion events. A hand-wave test verifies actual motion detection. Benchmark on this Pi Zero 2 W: native detection + 720p encoder used approximately 13% of one CPU core, about 17 MiB process RSS, no swapping or throttling, while sensor logging/upload continued. This measurement excludes packaging/upload bursts; check combined service load after installation.

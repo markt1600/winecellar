@@ -1,0 +1,14 @@
+[Unit]
+Description=Wine cellar lightweight motion camera
+StartLimitIntervalSec=0
+[Service]
+WorkingDirectory=%h/winecellar
+ExecStart=/usr/bin/python3 -u %h/winecellar/motion.py
+Restart=on-failure
+RestartSec=30
+Nice=10
+MemoryMax=100M
+CPUQuota=75%
+UMask=0077
+[Install]
+WantedBy=default.target

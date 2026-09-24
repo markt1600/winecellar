@@ -1,5 +1,6 @@
 'use client';
 import {useEffect,useState} from 'react';
+import Activity from './activity';
 const fields=[['bottle_c','Bottle','°C','#9b382b'],['ambient_c','Ambient','°C','#35767e'],['humidity_pct','Humidity','% RH','#6c6442']];
 const fmt=v=>typeof v==='number'&&Number.isFinite(v)?v.toFixed(1):'—';
 const time=v=>v?new Date(v).toLocaleString('en-SG',{timeZone:'Asia/Singapore',month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'}):'—';
@@ -39,5 +40,5 @@ export default function Dashboard({initialData=null,refresh=true}){
  <h2>Humidity</h2><Chart points={w.points} keys={['humidity_pct']} start={w.start} end={w.end} bucketSeconds={w.bucketSeconds} range={validTargets?[targets.humidityLow,targets.humidityHigh]:null}/>
  <section className="insights"><article><h3>Bottle − air</h3><strong>{fmt(Number.isFinite(latest.bottle_c)&&Number.isFinite(t)?latest.bottle_c-t:null)} °C</strong><p>Shows the bottle’s lag behind air changes.</p></article><article><h3>Estimated dew point</h3><strong>{fmt(dew)} °C</strong><p>Surfaces at or below this temperature may collect condensation.</p></article><article><h3>Recording health</h3><strong>{latest.bottle_error||latest.ambient_error?'Check sensors':stale?'Stale':'Recording'}</strong><p>Logging began {time(data.recordingSince)}. Missing values are excluded from statistics.</p></article></section>
  <details><summary>Display target ranges</summary><p>Illustrative starting ranges; adjust for your cellar. Saved in this browser, not used as alarm thresholds.</p><div className="targets">{[['low','Temperature low °C'],['high','Temperature high °C'],['humidityLow','Humidity low %'],['humidityHigh','Humidity high %']].map(([k,label])=><label key={k}>{label}<input type="number" value={targets[k]} onChange={e=>target(k,e.target.value)}/></label>)}</div>{!validTargets&&<p className="error">Each low must be below its high.</p>}</details>
- <section className="camera"><h2>Cellar activity</h2><p>Camera recording is not configured yet. Temperature and humidity logging are active independently.</p></section></>;
+ <Activity camera={data.camera} upload={data.cameraUpload}/></>;
 }

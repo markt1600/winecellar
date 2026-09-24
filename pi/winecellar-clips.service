@@ -1,0 +1,14 @@
+[Unit]
+Description=Wine cellar private motion clip uploads
+StartLimitIntervalSec=0
+[Service]
+WorkingDirectory=%h/winecellar
+ExecStart=/usr/bin/python3 -u %h/winecellar/clip_upload.py
+Restart=on-failure
+RestartSec=30
+Nice=15
+MemoryMax=100M
+CPUQuota=50%
+UMask=0077
+[Install]
+WantedBy=default.target

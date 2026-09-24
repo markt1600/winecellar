@@ -10,3 +10,7 @@ keys/
 *.sqlite3*
 *.pem
 *.mp4
+
+*.h264
+*.part
+spool/

@@ -51,6 +51,10 @@ def run():
                 # A short read transaction makes each snapshot internally consistent.
                 db.execute('BEGIN')
                 payload=snapshot(db)
+                if payload:
+                    for name,key in [('camera-status.json','camera'),('camera-upload-status.json','cameraUpload')]:
+                        try: payload[key]=json.loads((DATA/name).read_text())
+                        except (OSError,ValueError): pass
                 pending=[]
                 for hour,last_id in db.execute('SELECT substr(observed_at,1,13),MAX(id) FROM readings GROUP BY substr(observed_at,1,13) ORDER BY MIN(id)'):
                     old=state.execute('SELECT last_id FROM uploaded WHERE hour=?',(hour,)).fetchone()
