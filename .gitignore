@@ -1,0 +1,12 @@
+node_modules/
+.next/
+.vercel/
+.env*
+!.env.example
+__pycache__/
+.venv/
+data/
+keys/
+*.sqlite3*
+*.pem
+*.mp4

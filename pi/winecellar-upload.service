@@ -1,0 +1,14 @@
+[Unit]
+Description=Wine cellar private cloud sync
+After=winecellar-logger.service
+StartLimitIntervalSec=0
+
+[Service]
+WorkingDirectory=%h/winecellar
+ExecStart=%h/winecellar/.venv/bin/python -u %h/winecellar/upload.py
+Restart=on-failure
+RestartSec=15
+UMask=0077
+
+[Install]
+WantedBy=default.target

@@ -1,0 +1,14 @@
+[Unit]
+Description=Wine cellar temperature and humidity logger
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+WorkingDirectory=%h/winecellar
+ExecStart=%h/winecellar/.venv/bin/python -u %h/winecellar/logger.py
+Restart=on-failure
+RestartSec=10
+UMask=0077
+
+[Install]
+WantedBy=default.target
