@@ -25,5 +25,5 @@ export async function POST(request) {
     await put(path,body,{access:'private',addRandomSuffix:false,allowOverwrite:!!existing,
       ...(etag?{ifMatch:etag}:{}),contentType:'application/json',cacheControlMaxAge:60});
     return Response.json({ok:true});
-  }catch(error){console.error('Blob update failed',error?.name);return new Response('Storage unavailable; retry later',{status:503});}
+  }catch(error){console.error('Blob update failed',error?.constructor?.name,String(error?.message).replace(/https?:\/\/\S+|vercel_blob_\S+|Bearer\s+\S+/gi,'[redacted]').slice(0,300));return new Response('Storage unavailable; retry later',{status:503});}
 }
