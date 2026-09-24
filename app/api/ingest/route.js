@@ -1,4 +1,4 @@
-import {get,put} from '@vercel/blob';
+import {get,put,head,BlobNotFoundError} from '@vercel/blob';
 import {authentic,validatePayload} from '../../../lib/ingestion.mjs';
 export const runtime='nodejs';
 export const maxDuration=60;
@@ -12,7 +12,10 @@ export async function POST(request) {
   const path=p.kind==='snapshot'?'cellar/v1/dashboard.json':`cellar/v1/readings/${p.hour}.json`;
   try {
     // Version checks + conditional writes make retries idempotent and prevent older uploads winning.
-    const existing=await get(path,{access:'private',useCache:false});
+    // Obtain the storage ETag before reading: a compressed download may have a different ETag.
+    let metadata;
+    try{metadata=await head(path);}catch(error){if(!(error instanceof BlobNotFoundError))throw error;}
+    const existing=metadata?await get(path,{access:'private',useCache:false}):null;
     let etag;
     if(existing){
       if(existing.statusCode!==200)throw Error('Read failed');
@@ -20,7 +23,7 @@ export async function POST(request) {
       const oldVersion=p.kind==='snapshot'?Date.parse(old.generatedAt):Math.max(...old.rows.map(r=>r.id));
       const version=p.kind==='snapshot'?Date.parse(p.generatedAt):Math.max(...p.rows.map(r=>r.id));
       if(oldVersion>=version)return Response.json({ok:true,unchanged:true});
-      etag=existing.blob.etag;
+      etag=metadata.etag;
     }
     await put(path,body,{access:'private',addRandomSuffix:false,allowOverwrite:!!existing,
       ...(etag?{ifMatch:etag}:{}),contentType:'application/json',cacheControlMaxAge:60});
