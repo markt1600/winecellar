@@ -27,10 +27,11 @@ def statistics(db, start, end):
     return result
 
 
-def snapshot(db, now=None):
+def snapshot(db, now=None, session=None):
     now = now or datetime.now(timezone.utc)
-    first = db.execute('SELECT MIN(observed_at) FROM readings').fetchone()[0]
-    latest = db.execute('SELECT * FROM readings ORDER BY id DESC LIMIT 1').fetchone()
+    cutoff=iso(datetime.fromisoformat(session['startedAt'].replace('Z','+00:00'))) if session else ''
+    first = db.execute('SELECT MIN(observed_at) FROM readings WHERE observed_at>=?',(cutoff,)).fetchone()[0]
+    latest = db.execute('SELECT * FROM readings WHERE observed_at>=? ORDER BY id DESC LIMIT 1',(cutoff,)).fetchone()
     if not latest:
         return None
     ends = iso(now)
@@ -39,6 +40,7 @@ def snapshot(db, now=None):
     steps = {'1h':10, '24h':120, '1mo':3600, '1y':86400}
     windows = {}
     for key, start in starts.items():
+        if session:start=max(start,datetime.fromisoformat(cutoff))
         step=steps[key]
         columns=', '.join(f'AVG({f}) AS {f}, MIN({f}) AS {f}_min, MAX({f}) AS {f}_max, COUNT({f}) AS {f}_count' for f in FIELDS)
         rows=db.execute(f'''SELECT CAST(unixepoch(observed_at)/? AS INTEGER)*? AS bucket,
@@ -52,5 +54,5 @@ def snapshot(db, now=None):
             points.append(p)
         windows[key]=dict(start=iso(start),end=ends,bucketSeconds=step,points=points,
                           samples=sum(p['samples'] for p in points),stats=statistics(db,iso(start),ends))
-    return dict(version=1,kind='snapshot',generatedAt=ends,recordingSince=first,
+    return dict(version=1,kind='snapshot',generatedAt=ends,recordingSince=first,monitoringSession=session,
                 latest=dict(latest),allTime=statistics(db,first,ends),windows=windows)

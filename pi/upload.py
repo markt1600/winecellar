@@ -18,7 +18,7 @@ DATA=ROOT/'data'
 URL='https://winecellar.marktan.ai/api/ingest'
 
 
-def send(payload):
+def send(payload,url=URL):
     body=json.dumps(payload,separators=(',',':'),allow_nan=False).encode()
     stamp=str(int(time.time()*1000))
     # OpenSSL Ed25519 signing needs a seekable input; the temporary file holds readings, not a key.
@@ -27,12 +27,14 @@ def send(payload):
         message.flush()
         signature=subprocess.check_output(['openssl','pkeyutl','-sign','-rawin','-inkey',
             str(ROOT/'keys/upload.pem'),'-in',message.name],stderr=subprocess.DEVNULL)
-    request=urllib.request.Request(URL,data=body,method='POST',headers={
+    request=urllib.request.Request(url,data=body,method='POST',headers={
         'Content-Type':'application/json','X-Cellar-Time':stamp,
         'X-Cellar-Signature':base64.b64encode(signature).decode()})
     with urllib.request.urlopen(request,timeout=70) as response:
-        if response.status!=200 or json.load(response).get('ok') is not True:
+        result=json.load(response)
+        if response.status!=200 or result.get('ok') is not True:
             raise RuntimeError('Upload not acknowledged')
+        return result
 
 
 def run():
@@ -45,12 +47,17 @@ def run():
     while True:
         started=time.monotonic()
         try:
+            session=send({'kind':'monitoring-config'},'https://winecellar.marktan.ai/api/monitoring/device')['session']
+            # Persist session locally for future displays and preserve its boundary across reboots.
+            temp=DATA/'monitoring-session.tmp'
+            temp.write_text(json.dumps(session))
+            os.replace(temp,DATA/'monitoring-session.json')
             db=sqlite3.connect(f'file:{DATA / "readings.sqlite3"}?mode=ro',uri=True,timeout=10)
             db.row_factory=sqlite3.Row
             try:
                 # A short read transaction makes each snapshot internally consistent.
                 db.execute('BEGIN')
-                payload=snapshot(db)
+                payload=snapshot(db,session=session)
                 if payload:
                     for name,key in [('camera-status.json','camera'),('camera-upload-status.json','cameraUpload')]:
                         try: payload[key]=json.loads((DATA/name).read_text())

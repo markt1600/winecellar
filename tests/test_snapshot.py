@@ -28,6 +28,16 @@ class SnapshotTest(unittest.TestCase):
         self.assertEqual(result['windows']['1h']['samples'],3)
         self.assertEqual(result['windows']['1mo']['stats']['bottle_c']['count'],3)
         self.assertLessEqual(len(result['windows']['1y']['points']),367)
+        session={'id':'new-location','location':'Cellar','startedAt':'2026-09-24T10:30:05.000Z'}
+        reset=snapshot(db,datetime(2026,9,24,11,tzinfo=timezone.utc),session=session)
+        self.assertEqual(reset['allTime']['bottle_c']['min'],14)
+        self.assertEqual(reset['allTime']['humidity_pct']['min'],70)
+        self.assertEqual(reset['monitoringSession'],session)
+        for window in reset['windows'].values():
+            self.assertEqual(window['samples'],2)
+            self.assertEqual(window['stats']['bottle_c']['min'],14)
+        self.assertEqual(db.execute('SELECT COUNT(*) FROM readings').fetchone()[0],4)
+        self.assertIsNone(snapshot(db,datetime(2026,9,24,11,tzinfo=timezone.utc),session={**session,'startedAt':'2026-09-24T10:59:00Z'}))
 
 if __name__=='__main__':
     unittest.main()

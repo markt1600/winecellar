@@ -1,6 +1,6 @@
 # The Cellar
 
-Private environmental journal at https://winecellar.marktan.ai. Raspberry Pi Zero 2 W reads a DS18B20 on GPIO4 and a DHT22 on GPIO22. Motion video stays in private storage. No face detection or extraction is performed.
+Environmental journal at https://winecellar.marktan.ai. Raspberry Pi Zero 2 W reads a DS18B20 on GPIO4 and a DHT22 on GPIO22. Motion video stays in private storage. No face detection or extraction is performed.
 
 ## Running system
 
@@ -16,7 +16,7 @@ The uploader runs once a minute. It stores raw readings in per-hour JSON objects
 
 The Pi signs each upload using Ed25519. Its private key lives only in `~/winecellar/keys/upload.pem`, mode 600, and is not the SSH key. The matching public key is in `lib/ingestion.mjs`. The server verifies the signature, five-minute request timestamp window, size and schema before writing. Hour identifiers cannot select arbitrary paths. Blob credentials remain in Vercel. Reimaging requires restoring the database and device key or registering a replacement public key.
 
-`BLOB_READ_WRITE_TOKEN` is supplied by the private-store project integration. SDK access always requests `private`. Dashboard reads and archives are not public. The site verifies the existing `__Secure-mt_camera` owner session through `https://security.marktan.ai/api/session`; verification fails closed if that service is unavailable. No sign-in secret is copied. The parent marktan.ai login and security service must remain available. All API responses with readings are private/no-store.
+`BLOB_READ_WRITE_TOKEN` is supplied by the private-store project integration. SDK access always requests `private`. Environmental dashboard readings are public. Raw Blob archives and all camera endpoints remain private. The site verifies the existing `__Secure-mt_camera` owner session through `https://security.marktan.ai/api/session`; verification fails closed if that service is unavailable. No sign-in secret is copied. The parent marktan.ai login and security service must remain available. Environmental API responses are no-store. Camera responses are private/no-store.
 
 ## Dashboard
 
@@ -41,3 +41,12 @@ Local queue: `~/winecellar/camera/spool`. Pending footage is retained across upl
 Install both user service files, then `systemctl --user daemon-reload` and `systemctl --user enable --now winecellar-camera winecellar-clips`. Stop with `systemctl --user stop winecellar-camera winecellar-clips`. `data/camera-status.json` and `data/camera-upload-status.json` report capture/queue/cloud health, and sensor snapshots carry these statuses to the dashboard.
 
 A software-triggered setup clip can be requested with `touch ~/winecellar/camera/test-trigger`. These are explicitly labelled "Setup test", not motion events. A hand-wave test verifies actual motion detection. Benchmark on this Pi Zero 2 W: native detection + 720p encoder used approximately 13% of one CPU core, about 17 MiB process RSS, no swapping or throttling, while sensor logging/upload continued. This measurement excludes packaging/upload bursts; check combined service load after installation.
+
+
+## Public readings and monitoring periods
+
+The homepage and `/api/readings` expose environmental readings without login. Camera status, event listing, video playback and monitoring reset endpoints still require the shared Google owner session. Camera metadata is stripped from the environmental endpoint. Anonymous visitors see a camera login panel rather than recordings.
+
+The owner-only control at the bottom of the page starts a new monitoring period, optionally named for a location (the name is public). It requires explicit confirmation, owner authentication and the production same-origin header. The reset writes a private Blob boundary; the signed Pi uploader polls it every minute and computes charts, rolling extrema and period extrema only from readings at or after that boundary. Raw SQLite readings and hourly archives are preserved. Older history is retained but not selectable in this initial period-reset UI. Video collection is independent.
+
+The dashboard shows a waiting state until the Pi acknowledges the new boundary in a snapshot, so an old snapshot cannot masquerade as reset data. If offline, the Pi applies the boundary when it reconnects. Install the updated `pi/upload.py` and `pi/snapshot.py` on the Pi and restart `winecellar-upload` to enable this protocol. Adding the control does not itself reset any readings.

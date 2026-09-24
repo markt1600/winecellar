@@ -1,7 +1,10 @@
 'use client';
 import {useEffect,useState} from 'react';
 const date=v=>v?new Date(v).toLocaleString('en-SG',{timeZone:'Asia/Singapore'}):'—';
-export default function Activity({camera,upload}){
+export default function Activity(){
+ const [camera,setCamera]=useState(null),[upload,setUpload]=useState(null);
+ useEffect(()=>{let alive=true;async function check(){try{const r=await fetch('/api/camera-status',{cache:'no-store'});if(!r.ok)return;const d=await r.json();if(alive){setCamera(d.camera);setUpload(d.upload);}}catch{}}check();const timer=setInterval(check,30000);return()=>{alive=false;clearInterval(timer);};},[]);
+
  const [clips,setClips]=useState([]),[cursor,setCursor]=useState(null),[error,setError]=useState(''),[busy,setBusy]=useState(false);
  async function load(next){setBusy(true);try{const r=await fetch('/api/clips'+(next?'?cursor='+encodeURIComponent(next):''),{cache:'no-store'});if(!r.ok)throw Error('Recordings are temporarily unavailable.');const d=await r.json();setClips(old=>next?[...old,...d.clips]:d.clips);setCursor(d.cursor);setError('');}catch(e){setError(e.message);}finally{setBusy(false);}}
  useEffect(()=>{load();},[]);
