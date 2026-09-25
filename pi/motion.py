@@ -8,6 +8,7 @@ ROOT=Path.home()/'winecellar'
 SPOOL=ROOT/'camera/spool'
 BUFFER=Path(os.environ.get('XDG_RUNTIME_DIR',f'/run/user/{os.getuid()}'))/'winecellar-buffer'
 STATUS=ROOT/'data/camera-status.json'
+LAST_MOTION=ROOT/'data/camera-last-motion.json'
 PRE=5.0
 POST=5.0
 MAX=20.0
@@ -28,6 +29,20 @@ def main():
  config=ROOT/'camera/motion.json'
  if not config.exists():atomic(config,{'motion_detect':{'roi_x':0.05,'roi_y':0.05,'roi_width':0.9,'roi_height':0.9,'difference_m':0.1,'difference_c':15,'region_threshold':0.02,'frame_period':5,'hskip':2,'vskip':2,'verbose':1}})
  events=queue.Queue();motion=False;last_motion=0;active=None;ring=collections.deque();seen=set();last_status=0;last_frame=time.monotonic();start=last_frame;offset=time.time()-start;blocked=False;closing=False;last_saved=None
+ last_detected=None
+ try:last_detected=json.loads(LAST_MOTION.read_text()).get('lastMotionAt')
+ except (OSError,ValueError):
+  # Existing motion clips are evidence of detection; setup-test clips are not.
+  detected=[]
+  with queue_lock(SPOOL):
+   for record in SPOOL.glob('*.json'):
+    try:
+     m=json.loads(record.read_text())
+     if m.get('kind')=='motion':detected.append(m['triggeredAt'])
+    except (OSError,ValueError,KeyError):pass
+  if detected:last_detected=max(detected)
+ persisted=last_detected
+ if last_detected:atomic(LAST_MOTION,dict(lastMotionAt=last_detected))
  process=subprocess.Popen(command(config),stderr=subprocess.PIPE,stdout=subprocess.DEVNULL,text=True,bufsize=1)
  def reader():
   for line in process.stderr:
@@ -63,7 +78,9 @@ def main():
    if process.poll() is not None:raise RuntimeError('Camera process exited')
    while not events.empty():
     stamp,state=events.get();motion=state
-    if state:last_motion=stamp
+    if state:
+     last_motion=stamp
+     if stamp-start>=8:last_detected=utc(offset+stamp)
    if motion:last_motion=now
    paths=sorted(BUFFER.glob('segment*.h264'))
    # Only consume closed segments; the final file is still being encoded.
@@ -81,13 +98,15 @@ def main():
    if len(seen)>100:seen={s[0] for s in ring}
    if now-last_frame>12:raise RuntimeError('Camera stopped producing frames')
    if now-last_status>=10:
+    if last_detected!=persisted:
+     atomic(LAST_MOTION,dict(lastMotionAt=last_detected));persisted=last_detected
     with queue_lock(SPOOL):
      prune_locked(SPOOL)
      spool_bytes=sum(p.stat().st_size for p in SPOOL.iterdir() if p.is_file())
     free=shutil.disk_usage(SPOOL).free
     blocked=free<1024**3 or spool_bytes>512*1024**2
     temp=int(Path('/sys/class/thermal/thermal_zone0/temp').read_text())/1000
-    atomic(STATUS,dict(observedAt=utc(time.time()),state='storage_full' if blocked else 'recording' if active else 'watching',motion=motion,queuedClips=len(list(SPOOL.glob('*.json'))),lastSavedAt=last_saved,temperatureC=temp,width=1280,height=720,fps=FPS,preRollSeconds=PRE,postRollSeconds=POST))
+    atomic(STATUS,dict(observedAt=utc(time.time()),state='storage_full' if blocked else 'recording' if active else 'watching',motion=motion,lastMotionAt=last_detected,queuedClips=len(list(SPOOL.glob('*.json'))),lastSavedAt=last_saved,temperatureC=temp,width=1280,height=720,fps=FPS,preRollSeconds=PRE,postRollSeconds=POST))
     last_status=now
     if temp>=78:raise RuntimeError('Camera paused due to high Pi temperature')
    if now-start<8:
@@ -107,7 +126,8 @@ def main():
   try:process.wait(timeout=8)
   except subprocess.TimeoutExpired:process.kill();process.wait()
   if active:finish()
-  atomic(STATUS,dict(observedAt=utc(time.time()),state='stopped'))
+  if last_detected:atomic(LAST_MOTION,dict(lastMotionAt=last_detected))
+  atomic(STATUS,dict(observedAt=utc(time.time()),state='stopped',lastMotionAt=last_detected))
   for path in BUFFER.glob('segment*.h264'):path.unlink()
 
 if __name__=='__main__':main()
