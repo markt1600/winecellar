@@ -1,0 +1,12 @@
+[Unit]
+Description=Wine cellar local LCD dashboard
+StartLimitIntervalSec=0
+[Service]
+WorkingDirectory=%h/winecellar
+ExecStart=/usr/bin/python3 -u %h/winecellar/lcd.py
+Restart=on-failure
+RestartSec=15
+Nice=10
+UMask=0077
+[Install]
+WantedBy=default.target
