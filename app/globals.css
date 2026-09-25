@@ -6,3 +6,5 @@
 .reading-times{display:grid;gap:3px;font:12px/1.6 ui-monospace,monospace;overflow-wrap:anywhere}.reading-times span{color:var(--soft)}.reading-times time{font-weight:600}.current p.warning{color:#9c261f}
 
 .current strong.outside-target{color:#9c261f}.current .target-note{margin-top:-8px;font-weight:600}
+
+.wifi-status{padding:10px 0;border-bottom:1px solid var(--rule);font:13px/1.7 ui-monospace,monospace;overflow-wrap:anywhere}.wifi-time{display:block;color:var(--soft);font-size:12px}

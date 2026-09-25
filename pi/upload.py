@@ -12,6 +12,7 @@ import time
 import urllib.request
 from datetime import datetime, timezone
 from snapshot import snapshot
+from wifi_status import wifi_status
 
 ROOT=Path.home()/'winecellar'
 DATA=ROOT/'data'
@@ -78,6 +79,7 @@ def run():
                 with state:
                     state.execute('INSERT OR REPLACE INTO uploaded VALUES (?,?)',(hour,last_id))
             if payload:
+                payload['wifi']=wifi_status()
                 send(payload)
                 status=dict(last_success=datetime.now(timezone.utc).isoformat(),uploaded_through=payload['latest']['observed_at'])
                 temp=DATA/'upload-status.tmp'
