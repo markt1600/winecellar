@@ -1,6 +1,7 @@
-import {get,put,list,head,BlobNotFoundError} from '@vercel/blob';
+import {get,put,head,BlobNotFoundError} from '@vercel/blob';
 import {authentic} from '../../../lib/ingestion.mjs';
 import {decodeClip,MAX_CLIP_BYTES} from '../../../lib/clips.mjs';
+import {pruneClips,allBlobs,retentionPlan,CLIP_LIMIT} from '../../../lib/clip-retention.mjs';
 import {isOwner,headers} from '../../../lib/auth.mjs';
 export const runtime='nodejs';
 export const dynamic='force-dynamic';
@@ -20,16 +21,15 @@ export async function POST(request){
     const existing=await get(recordPath,{access:'private',useCache:false});
     if(existing){const old=await new Response(existing.stream).json();if(old.sha256!==clip.metadata.sha256)return new Response('Clip identity conflict',{status:409});}
     else await put(recordPath,JSON.stringify({...clip.metadata,path}),{access:'private',addRandomSuffix:false,contentType:'application/json'});
+    await pruneClips();
     return Response.json({ok:true,id:clip.metadata.id});
   }catch{return new Response('Storage unavailable',{status:503});}
 }
 export async function GET(request){
   if(!await isOwner())return Response.json({error:'Please sign in.'},{status:401,headers});
-  const cursor=new URL(request.url).searchParams.get('cursor')||undefined;
-  if(cursor&&cursor.length>2048)return new Response('Invalid cursor',{status:400});
   try{
-    const page=await list({prefix:'cellar/v1/events/',limit:12,cursor});
+    const page={blobs:retentionPlan(await allBlobs('cellar/v1/events/'),[]).kept};
     const clips=await Promise.all(page.blobs.map(async b=>{const r=await get(b.pathname,{access:'private'});if(!r||r.statusCode!==200)throw Error('Unavailable');const {path,sha256,...m}=await new Response(r.stream).json();return m;}));
-    return Response.json({clips,cursor:page.hasMore?page.cursor:null},{headers});
+    return Response.json({clips,cursor:null,retentionLimit:CLIP_LIMIT},{headers});
   }catch{return Response.json({error:'Clips are temporarily unavailable.'},{status:503,headers});}
 }
