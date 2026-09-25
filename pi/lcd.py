@@ -14,7 +14,7 @@ def draw_dashboard(row, day, alltime, session=None, now=None):
  def text(x,y,s,size=14,color='#edf2f4'):d.text((x,y),s,font=font(size),fill=color)
  def center(x,y,s,size=14,color='#edf2f4'):
   f=font(size);d.text((x-d.textlength(s,font=f)/2,y),s,font=f,fill=color)
- text(12,7,'THE WINE CELLAR',17,'#e6c699')
+ text(12,7,'Cellar @ BH',17,'#e6c699')
  stamp=now.astimezone().strftime('%d %b  %H:%M')
  text(480-12-d.textlength(stamp,font=font(13)),10,stamp,13,'#a5b1b7')
  d.line((12,32,468,32),fill='#4b493d')
@@ -77,3 +77,4 @@ def main():
   with open('/dev/'+fb.name,'r+b',buffering=0) as output:output.write(pixels)
   time.sleep(10)
 if __name__=='__main__':main()
+
