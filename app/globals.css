@@ -4,3 +4,5 @@
 .monitoring-reset{border-top:3px double var(--rule);padding:28px 0}.monitoring-reset p{max-width:760px;color:var(--soft)}.monitoring-reset input{max-width:420px}
 
 .reading-times{display:grid;gap:3px;font:12px/1.6 ui-monospace,monospace;overflow-wrap:anywhere}.reading-times span{color:var(--soft)}.reading-times time{font-weight:600}.current p.warning{color:#9c261f}
+
+.current strong.outside-target{color:#9c261f}.current .target-note{margin-top:-8px;font-weight:600}

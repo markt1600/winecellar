@@ -9,3 +9,12 @@ test('failed samples retain the successful time without making the value current
  assert.equal(readingHealth(data,'ambient_c',now+181000).status,'Stale reading - Pi has not updated');
  assert.equal(readingHealth({...data,lastSuccessful:{}},'bottle_c',now).lastAt,null);
 });
+import {targetStatus} from '../lib/reading-health.mjs';
+test('target warnings exclude missing values and invalid ranges, with inclusive boundaries',()=>{
+ assert.equal(targetStatus(11.9,12,16),'Below target');
+ assert.equal(targetStatus(16.1,12,16),'Above target');
+ for(const v of [12,14,16,null,undefined,NaN])assert.equal(targetStatus(v,12,16),null);
+ assert.equal(targetStatus(80,50,75),'Above target');
+ assert.equal(targetStatus(20,16,12),null);
+ assert.equal(targetStatus(20,12,12),null);
+});
