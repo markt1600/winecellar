@@ -12,6 +12,8 @@ export async function GET(){
     if(session&&data.monitoringSession?.id!==session.id)return Response.json({empty:true,resetPending:true,monitoringSession:session},{headers});
     // Environmental readings are public. Camera status and upload identifiers remain private.
     const {camera,cameraUpload,...environment}=data;
-    return Response.json(environment,{headers});
+    const states=['watching','recording','storage_full','stopped'];
+    const cameraHealth=camera?{observedAt:camera.observedAt,state:states.includes(camera.state)?camera.state:'unavailable',queuedClips:Number.isSafeInteger(camera.queuedClips)&&camera.queuedClips>=0?camera.queuedClips:null}:null;
+    return Response.json({...environment,cameraHealth},{headers});
   }catch{return Response.json({error:'Readings are temporarily unavailable.'},{status:503,headers});}
 }
