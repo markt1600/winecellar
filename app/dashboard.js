@@ -1,9 +1,11 @@
 'use client';
 import {useEffect,useState} from 'react';
+import {readingHealth} from '../lib/reading-health.mjs';
 
 const fields=[['bottle_c','Bottle','°C','#9b382b'],['ambient_c','Ambient','°C','#35767e'],['humidity_pct','Humidity','% RH','#6c6442']];
 const fmt=v=>typeof v==='number'&&Number.isFinite(v)?v.toFixed(1):'—';
 const time=v=>v?new Date(v).toLocaleString('en-SG',{timeZone:'Asia/Singapore',month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'}):'—';
+const readingTime=v=>v?new Date(v).toLocaleString('en-SG',{timeZone:'Asia/Singapore',month:'short',day:'numeric',hour:'2-digit',minute:'2-digit',second:'2-digit'})+' SGT':'No successful reading in this period';
 function Chart({points,keys,start,end,range,bucketSeconds}){
   const values=points.flatMap(p=>keys.flatMap(k=>[p[k],p[k+'_min'],p[k+'_max']])).filter(Number.isFinite);
   if(!values.length)return <p className="empty">No valid readings for this period.</p>;
@@ -20,19 +22,21 @@ function Chart({points,keys,start,end,range,bucketSeconds}){
 }
 export default function Dashboard({initialData=null,refresh=true}){
  const [data,setData]=useState(initialData),[error,setError]=useState(''),[period,setPeriod]=useState('24h');
+ const [now,setNow]=useState(()=>Date.now());
+ useEffect(()=>{const id=setInterval(()=>setNow(Date.now()),10000);return()=>clearInterval(id);},[]);
  const [targets,setTargets]=useState({low:12,high:16,humidityLow:50,humidityHigh:75});
  useEffect(()=>{try{const saved=JSON.parse(localStorage.getItem('cellar-targets'));if(saved&&Object.values(saved).every(Number.isFinite))setTargets(saved);}catch{}},[]);
  useEffect(()=>{if(!refresh)return;let live=true;async function load(){try{const r=await fetch('/api/readings',{cache:'no-store'});if(!r.ok)throw Error(r.status===401?'Your session has expired. Sign in at marktan.ai, then reload.':'Cloud readings are temporarily unavailable.');const d=await r.json();if(live){setData(d);setError('');}}catch(e){if(live)setError(e.message);}}load();const id=setInterval(load,30000);return()=>{live=false;clearInterval(id);};},[refresh]);
  function target(k,value){const next={...targets,[k]:Number(value)};setTargets(next);localStorage.setItem('cellar-targets',JSON.stringify(next));}
  if(!data||data.empty)return <section className="gate"><h2>{error?'Connection unavailable':data?.resetPending?'Starting a new monitoring period':data?.empty?'Waiting for the first upload':'Loading your cellar…'}</h2><p>{error||(data?.resetPending?'Waiting for the Pi to upload readings from the new period. Previous readings remain saved.':'Readings appear here after the Pi uploads them.')}</p></section>;
- const w=data.windows[period],latest=data.latest,age=Date.now()-Date.parse(latest.observed_at),stale=age>180000;
+ const w=data.windows[period],latest=data.latest,age=now-Date.parse(latest.observed_at),stale=age>180000;
  const t=latest.ambient_c,h=latest.humidity_pct;
  const a=Number.isFinite(t)&&Number.isFinite(h)&&h>0?Math.log(h/100)+17.62*t/(243.12+t):null;
  const dew=a!==null?243.12*a/(17.62-a):null;
  const validTargets=targets.low<targets.high&&targets.humidityLow<targets.humidityHigh;
  function exportCsv(){const names=['at',...fields.flatMap(([k])=>[k,k+'_min',k+'_max'])];const csv=[names.join(','),...w.points.map(p=>names.map(k=>p[k]??'').join(','))].join('\n');const url=URL.createObjectURL(new Blob([csv],{type:'text/csv'}));const link=document.createElement('a');link.href=url;link.download=`winecellar-${period}-chart.csv`;link.click();URL.revokeObjectURL(url);}
- return <><div className="journal"><span className={stale?'warning':''}>{stale?'● READINGS STALE':'● RECENT READINGS'} · {time(latest.observed_at)}</span><span>Cloud sync · {time(data.generatedAt)}</span></div>{error&&<p className="error">{error}</p>}
- <section className="current">{fields.map(([k,label,unit,color])=><article key={k}><h2 style={{color}}>{label}</h2><strong>{fmt(latest[k])}<small>{unit}</small></strong><p>{stale?'Last received value':latest[k]===null?'Sensor reading unavailable':'Current reading'}</p><dl><dt>24h low / high</dt><dd>{fmt(data.windows['24h'].stats[k]?.min)} / {fmt(data.windows['24h'].stats[k]?.max)}</dd><dt>{data.monitoringSession?'Period low / high':'All-time low / high'}</dt><dd>{fmt(data.allTime[k]?.min)} / {fmt(data.allTime[k]?.max)}</dd></dl></article>)}</section>
+ return <><div className="journal"><span className={stale?'warning':''}>{stale?'● LOGGER DATA STALE':fields.some(([k])=>!Number.isFinite(latest[k]))?'● LOGGER ONLINE · SENSOR ISSUE':'● RECENT READINGS'} · {time(latest.observed_at)}</span><span>Cloud sync · {time(data.generatedAt)}</span></div>{error&&<p className="error">{error}</p>}
+ <section className="current">{fields.map(([k,label,unit,color])=>{const health=readingHealth(data,k,now);return <article key={k}><h2 style={{color}}>{label}</h2><strong>{fmt(latest[k])}<small>{unit}</small></strong><p className={health.status==='Current reading'?'':'warning'}>{health.status}</p><div className="reading-times"><span>Last successful reading</span><time dateTime={health.lastAt||undefined}>{readingTime(health.lastAt)}</time><span>Latest attempt: {readingTime(latest.observed_at)}</span></div><dl><dt>24h low / high</dt><dd>{fmt(data.windows['24h'].stats[k]?.min)} / {fmt(data.windows['24h'].stats[k]?.max)}</dd><dt>{data.monitoringSession?'Period low / high':'All-time low / high'}</dt><dd>{fmt(data.allTime[k]?.min)} / {fmt(data.allTime[k]?.max)}</dd></dl></article>;})}</section>
  {data.monitoringSession&&<p className="muted">Monitoring period: {data.monitoringSession.location||'New location'} · Started {time(data.monitoringSession.startedAt)}</p>}<div className="toolbar"><h2>Cellar history</h2><nav aria-label="History period">{[['1h','1 hour'],['24h','24 hours'],['1mo','1 month'],['1y','1 year']].map(([k,label])=><button key={k} aria-pressed={period===k} onClick={()=>setPeriod(k)}>{label}</button>)}</nav><button onClick={exportCsv}>Export chart CSV</button></div>
  <p className="muted">{time(w.start)} — {time(w.end)} · {w.samples.toLocaleString()} samples · {w.bucketSeconds}s chart intervals. Longer intervals show averages with min–max whiskers. Gaps are not interpolated.</p>
  <div className="legend"><span style={{color:fields[0][3]}}>● Bottle</span><span style={{color:fields[1][3]}}>● Ambient</span></div><Chart points={w.points} keys={['bottle_c','ambient_c']} start={w.start} end={w.end} bucketSeconds={w.bucketSeconds} range={validTargets?[targets.low,targets.high]:null}/>

@@ -25,6 +25,8 @@ class SnapshotTest(unittest.TestCase):
         self.assertEqual(s['ambient_c']['maxAt'],rows[3][1])
         self.assertEqual(result['allTime']['bottle_c']['min'],4)
         self.assertIsNone(result['latest']['bottle_c'])
+        self.assertEqual(result['lastSuccessful']['bottle_c'],dict(observed_at=rows[2][1],value=14))
+        self.assertEqual(result['lastSuccessful']['humidity_pct']['observed_at'],rows[3][1])
         self.assertEqual(result['windows']['1h']['samples'],3)
         self.assertEqual(result['windows']['1mo']['stats']['bottle_c']['count'],3)
         self.assertLessEqual(len(result['windows']['1y']['points']),367)
@@ -36,6 +38,9 @@ class SnapshotTest(unittest.TestCase):
         for window in reset['windows'].values():
             self.assertEqual(window['samples'],2)
             self.assertEqual(window['stats']['bottle_c']['min'],14)
+        late=snapshot(db,datetime(2026,9,24,11,tzinfo=timezone.utc),session={**session,'startedAt':'2026-09-24T10:30:15Z'})
+        self.assertIsNone(late['lastSuccessful']['bottle_c'])
+        self.assertEqual(late['lastSuccessful']['ambient_c']['value'],15)
         self.assertEqual(db.execute('SELECT COUNT(*) FROM readings').fetchone()[0],4)
         self.assertIsNone(snapshot(db,datetime(2026,9,24,11,tzinfo=timezone.utc),session={**session,'startedAt':'2026-09-24T10:59:00Z'}))
 

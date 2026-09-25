@@ -2,3 +2,5 @@
 .clips{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:24px}.clips article{border-top:1px solid var(--rule);padding:18px 0}.clips video{width:100%;background:#171712;aspect-ratio:16/9}.clips h3{margin-bottom:5px}button:disabled{opacity:.5;cursor:wait}@media(max-width:700px){.clips{grid-template-columns:1fr}}
 
 .monitoring-reset{border-top:3px double var(--rule);padding:28px 0}.monitoring-reset p{max-width:760px;color:var(--soft)}.monitoring-reset input{max-width:420px}
+
+.reading-times{display:grid;gap:3px;font:12px/1.6 ui-monospace,monospace;overflow-wrap:anywhere}.reading-times span{color:var(--soft)}.reading-times time{font-weight:600}.current p.warning{color:#9c261f}

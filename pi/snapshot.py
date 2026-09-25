@@ -35,6 +35,10 @@ def snapshot(db, now=None, session=None):
     if not latest:
         return None
     ends = iso(now)
+    last_successful = {}
+    for field in FIELDS:
+        row = db.execute(f'SELECT observed_at, {field} AS value FROM readings WHERE observed_at>=? AND observed_at<=? AND {field} IS NOT NULL ORDER BY observed_at DESC, id DESC LIMIT 1', (cutoff, ends)).fetchone()
+        last_successful[field] = dict(row) if row else None
     starts = {'1h':now-timedelta(hours=1), '24h':now-timedelta(hours=24),
               '1mo':previous_month(now), '1y':now.replace(year=now.year-1,day=min(now.day,calendar.monthrange(now.year-1,now.month)[1]))}
     steps = {'1h':10, '24h':120, '1mo':3600, '1y':86400}
@@ -55,4 +59,4 @@ def snapshot(db, now=None, session=None):
         windows[key]=dict(start=iso(start),end=ends,bucketSeconds=step,points=points,
                           samples=sum(p['samples'] for p in points),stats=statistics(db,iso(start),ends))
     return dict(version=1,kind='snapshot',generatedAt=ends,recordingSince=first,monitoringSession=session,
-                latest=dict(latest),allTime=statistics(db,first,ends),windows=windows)
+                latest=dict(latest),lastSuccessful=last_successful,allTime=statistics(db,first,ends),windows=windows)
