@@ -1,0 +1,12 @@
+[Unit]
+Description=Wine cellar owner reboot control
+StartLimitIntervalSec=0
+[Service]
+Type=simple
+WorkingDirectory=%h/winecellar
+ExecStart=/usr/bin/python3 -u %h/winecellar/reboot_control.py
+Restart=on-failure
+RestartSec=15
+UMask=0077
+[Install]
+WantedBy=default.target
