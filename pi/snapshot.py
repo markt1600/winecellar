@@ -1,6 +1,7 @@
 """Build bounded chart snapshots from the authoritative local SQLite database."""
 from datetime import datetime, timedelta, timezone
 import calendar
+import math
 import sqlite3
 
 FIELDS = ('bottle_c', 'ambient_c', 'humidity_pct')
@@ -15,11 +16,16 @@ def previous_month(now):
     return now.replace(year=year, month=month, day=min(now.day, calendar.monthrange(year, month)[1]))
 
 
-def statistics(db, start, end):
+def statistics(db, start, end, variability=False):
     result = {}
     for field in FIELDS:
         row = db.execute(f'SELECT COUNT({field}), MIN({field}), MAX({field}), AVG({field}) FROM readings WHERE observed_at>=? AND observed_at<=?', (start, end)).fetchone()
         item = dict(count=row[0], min=row[1], max=row[2], avg=row[3], minAt=None, maxAt=None)
+        if variability:
+            item['stddev']=None
+            if row[0]>=2:
+                variance=db.execute(f'SELECT AVG(({field}-?)*({field}-?)) FROM readings WHERE observed_at>=? AND observed_at<=?',(row[3],row[3],start,end)).fetchone()[0]
+                item['stddev']=math.sqrt(max(0,variance))
         if row[0]:
             for kind, order in [('min', 'ASC'), ('max', 'DESC')]:
                 item[kind+'At'] = db.execute(f'SELECT observed_at FROM readings WHERE observed_at>=? AND observed_at<=? AND {field} IS NOT NULL ORDER BY {field} {order}, observed_at LIMIT 1', (start, end)).fetchone()[0]
@@ -57,6 +63,6 @@ def snapshot(db, now=None, session=None):
             p['at']=iso(max(start,datetime.fromtimestamp(bucket,timezone.utc)))
             points.append(p)
         windows[key]=dict(start=iso(start),end=ends,bucketSeconds=step,points=points,
-                          samples=sum(p['samples'] for p in points),stats=statistics(db,iso(start),ends))
+                          samples=sum(p['samples'] for p in points),stats=statistics(db,iso(start),ends,variability=True))
     return dict(version=1,kind='snapshot',generatedAt=ends,recordingSince=first,monitoringSession=session,
                 latest=dict(latest),lastSuccessful=last_successful,allTime=statistics(db,first,ends),windows=windows)

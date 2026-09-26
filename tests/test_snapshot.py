@@ -21,6 +21,8 @@ class SnapshotTest(unittest.TestCase):
         self.assertEqual(s['bottle_c']['min'],12)
         self.assertEqual(s['bottle_c']['max'],14)
         self.assertEqual(s['bottle_c']['avg'],13)
+        self.assertAlmostEqual(s['bottle_c']['stddev'],1)
+        self.assertAlmostEqual(s['humidity_pct']['stddev'],5)
         self.assertEqual(s['ambient_c']['count'],2)
         self.assertEqual(s['ambient_c']['maxAt'],rows[3][1])
         self.assertEqual(result['allTime']['bottle_c']['min'],4)
@@ -38,6 +40,7 @@ class SnapshotTest(unittest.TestCase):
         for window in reset['windows'].values():
             self.assertEqual(window['samples'],2)
             self.assertEqual(window['stats']['bottle_c']['min'],14)
+            self.assertIsNone(window['stats']['bottle_c']['stddev'])
         late=snapshot(db,datetime(2026,9,24,11,tzinfo=timezone.utc),session={**session,'startedAt':'2026-09-24T10:30:15Z'})
         self.assertIsNone(late['lastSuccessful']['bottle_c'])
         self.assertEqual(late['lastSuccessful']['ambient_c']['value'],15)
