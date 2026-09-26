@@ -3,7 +3,7 @@ import json,os,time,subprocess,logging
 from pathlib import Path
 from datetime import datetime,timezone
 from upload import send
-from camera_control import camera_state,set_camera_paused,refresh_paused_status
+from camera_control import camera_state,set_camera_paused,refresh_paused_status,camera_health
 ROOT=Path.home()/'winecellar'
 STATE=ROOT/'data/reboot-handled.json'
 HELPER='/usr/local/sbin/winecellar-reboot'
@@ -33,7 +33,7 @@ def run():
    ready=Path(HELPER).exists() and subprocess.run(['/usr/bin/sudo','-n','-l',HELPER],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL).returncode==0
    shutdown_ready=Path(SHUTDOWN_HELPER).exists() and subprocess.run(['/usr/bin/sudo','-n','-l',SHUTDOWN_HELPER],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL).returncode==0
    camera=camera_state();refresh_paused_status(ROOT,camera)
-   command=send(dict(bootId=boot,ready=ready,shutdownReady=shutdown_ready,**camera,handled=handled),URL).get('command')
+   command=send(dict(bootId=boot,ready=ready,shutdownReady=shutdown_ready,**camera,cameraHealth=camera_health(ROOT,camera),handled=handled),URL).get('command')
    if ready and eligible(command,handled,boot) and (command.get('action')!='shutdown' or shutdown_ready):
     # Persist before invoking the helper: the same request can never trigger a reboot loop.
     handled=dict(id=command['id'],status='accepted');persist(handled)
@@ -43,16 +43,16 @@ def run():
       handled['status']='completed'
      except Exception:handled['status']='failed'
      persist(handled);camera=camera_state();refresh_paused_status(ROOT,camera)
-     send(dict(bootId=boot,ready=ready,shutdownReady=shutdown_ready,**camera,handled=handled),URL)
+     send(dict(bootId=boot,ready=ready,shutdownReady=shutdown_ready,**camera,cameraHealth=camera_health(ROOT,camera),handled=handled),URL)
      continue
     helper=SHUTDOWN_HELPER if command.get('action')=='shutdown' else HELPER
     if command.get('action')=='shutdown':
      handled['status']='scheduled';persist(handled)
-     try:send(dict(bootId=boot,ready=ready,shutdownReady=shutdown_ready,**camera,handled=handled),URL)
+     try:send(dict(bootId=boot,ready=ready,shutdownReady=shutdown_ready,**camera,cameraHealth=camera_health(ROOT,camera),handled=handled),URL)
      except Exception:logging.warning('Shutdown acknowledgement unavailable; executing authorized request')
     result=subprocess.run(['/usr/bin/sudo','-n',helper],capture_output=True,timeout=15)
     handled['status']='scheduled' if result.returncode==0 else 'failed';persist(handled)
-    send(dict(bootId=boot,ready=ready,shutdownReady=shutdown_ready,**camera,handled=handled),URL)
+    send(dict(bootId=boot,ready=ready,shutdownReady=shutdown_ready,**camera,cameraHealth=camera_health(ROOT,camera),handled=handled),URL)
   except Exception as e:logging.warning('Reboot control delayed (%s)',type(e).__name__)
   time.sleep(15)
 if __name__=='__main__':run()

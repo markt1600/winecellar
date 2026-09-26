@@ -17,3 +17,11 @@ def refresh_paused_status(root,state):
  previous.update(observedAt=datetime.now(timezone.utc).isoformat(),state='paused',motion=False)
  path.parent.mkdir(parents=True,exist_ok=True)
  temp=path.with_suffix('.control.tmp');temp.write_text(json.dumps(previous));os.replace(temp,path)
+
+
+def camera_health(root,state):
+ try:value=json.loads((root/'data/camera-status.json').read_text())
+ except (OSError,ValueError):return None
+ if not state.get('cameraPaused') and value.get('state')=='paused':
+  value.update(state='starting',observedAt=datetime.now(timezone.utc).isoformat())
+ return {key:value.get(key) for key in ('state','observedAt','lastMotionAt','queuedClips')}
