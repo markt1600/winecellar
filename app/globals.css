@@ -8,3 +8,5 @@
 .current strong.outside-target{color:#9c261f}.current .target-note{margin-top:-8px;font-weight:600}
 
 .wifi-status{padding:10px 0;border-bottom:1px solid var(--rule);font:13px/1.7 ui-monospace,monospace;overflow-wrap:anywhere}.wifi-time{display:block;color:var(--soft);font-size:12px}
+
+.clip-player{position:relative}.clip-preview-note{position:absolute;top:12px;left:12px;right:12px;padding:8px 10px;background:#211c15dd;color:#f5efe2;font:12px/1.5 ui-monospace,monospace;pointer-events:none}
