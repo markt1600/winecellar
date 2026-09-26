@@ -16,6 +16,10 @@ def once():
   if not pending:return
   record=pending[0]
   meta=json.loads(record.read_text());raw=record.with_suffix('.h264');mp4=record.with_suffix('.mp4')
+  chosen=mp4 if mp4.exists() else raw
+  duration=(datetime.fromisoformat(meta['endedAt'].replace('Z','+00:00'))-datetime.fromisoformat(meta['startedAt'].replace('Z','+00:00'))).total_seconds()
+  if chosen.stat().st_size>3850000 or not 0<duration<=35:
+   remove_clip(SPOOL,record.stem);logging.warning('Discarded oversized or invalid-duration clip %s',record.stem);return
   media=mp4.read_bytes() if mp4.exists() else None
   source=raw.read_bytes() if media is None else None
  with tempfile.TemporaryDirectory(prefix='winecellar-upload-') as scratch:
@@ -23,7 +27,9 @@ def once():
    source_path=Path(scratch)/'source.h264';source_path.write_bytes(source)
    output=Path(scratch)/'clip.mp4'
    subprocess.run(['ffmpeg','-nostdin','-loglevel','error','-y','-fflags','+genpts','-r','15','-i',str(source_path),'-c:v','copy','-an','-movflags','+faststart',str(output)],check=True,timeout=60)
-   if output.stat().st_size>3850000:raise RuntimeError('Clip exceeds upload size limit')
+   if output.stat().st_size>3850000:
+    with queue_lock(SPOOL):remove_clip(SPOOL,record.stem)
+    logging.warning('Discarded oversized remuxed clip %s',record.stem);return
    media=output.read_bytes()
   if len(media)>3850000:raise RuntimeError('Clip exceeds upload size limit')
   info=json.dumps(meta,separators=(',',':')).encode();body=struct.pack('>I',len(info))+info+media

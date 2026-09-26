@@ -3,6 +3,7 @@ import collections,json,logging,os,queue,shutil,signal,subprocess,threading,time
 from datetime import datetime,timezone
 from pathlib import Path
 from clip_queue import queue_lock,prune_locked,prune_queue
+from recording_limits import trim_ring,can_append,deadline_reached,MAX_SEGMENT_BYTES
 
 ROOT=Path.home()/'winecellar'
 SPOOL=ROOT/'camera/spool'
@@ -56,19 +57,20 @@ def main():
  signal.signal(signal.SIGTERM,stop);signal.signal(signal.SIGINT,stop)
  def begin(trigger,kind='motion'):
   if not ring:return None
-  selected=[s for s in ring if s[2]>=trigger-PRE]
+  trim_ring(ring,trigger,PRE)
+  selected=[s for s in ring if trigger-PRE<=s[2]<=trigger]
   if not selected:return None
-  epoch=offset+trigger;ident=f'{9999999999999-int(epoch*1000):013d}-{uuid.uuid4().hex}'
+  clip_offset=time.time()-time.monotonic();epoch=clip_offset+trigger;ident=f'{9999999999999-int(epoch*1000):013d}-{uuid.uuid4().hex}'
   partial=SPOOL/(ident+'.part');stream=partial.open('wb')
   for s in selected:stream.write(s[3])
-  return dict(id=ident,file=stream,partial=partial,start=selected[0][1],end=selected[-1][2],last=selected[-1][0],trigger=trigger,kind=kind)
+  return dict(id=ident,file=stream,partial=partial,start=selected[0][1],end=selected[-1][2],last=selected[-1][0],trigger=trigger,kind=kind,bytes=sum(len(s[3]) for s in selected),born=trigger,offset=clip_offset)
  def finish(continued=False):
   nonlocal active,last_saved
   if not active:return
   a=active;a['file'].flush();os.fsync(a['file'].fileno());a['file'].close()
   with queue_lock(SPOOL):
    raw=SPOOL/(a['id']+'.h264');os.replace(a['partial'],raw)
-   atomic(SPOOL/(a['id']+'.json'),dict(version=1,id=a['id'],kind=a['kind'],startedAt=utc(offset+a['start']),endedAt=utc(offset+a['end']),triggeredAt=utc(offset+min(a['trigger'],a['end'])),continued=continued))
+   atomic(SPOOL/(a['id']+'.json'),dict(version=1,id=a['id'],kind=a['kind'],startedAt=utc(a['offset']+a['start']),endedAt=utc(a['offset']+a['end']),triggeredAt=utc(a['offset']+min(a['trigger'],a['end'])),continued=continued))
    removed=prune_locked(SPOOL)
   if removed:logging.info('Queue retention removed %s older clip(s)',removed)
   last_saved=utc(time.time());logging.info('Saved %s clip, %.1fs',a['kind'],a['end']-a['start']);active=None
@@ -80,20 +82,24 @@ def main():
     stamp,state=events.get();motion=state
     if state:
      last_motion=stamp
-     if stamp-start>=8:last_detected=utc(offset+stamp)
+     if stamp-start>=8:last_detected=utc(time.time())
    if motion:last_motion=now
    paths=sorted(BUFFER.glob('segment*.h264'))
    # Only consume closed segments; the final file is still being encoded.
-   for path in paths[:-1]:
+   closed=paths[:-1]
+   for index,path in enumerate(closed):
     if path.name in seen:continue
-    ended=path.stat().st_mtime-offset
-    began=ring[-1][2] if ring else ended-1.0
+    # Never compare wall-clock file mtimes with monotonic deadlines: NTP may step.
+    ended=now-(len(closed)-index-1)
+    began=max(ended-1.0,ring[-1][2]) if ring else ended-1.0
+    if path.stat().st_size>MAX_SEGMENT_BYTES:raise RuntimeError('Oversized camera segment')
     data=path.read_bytes();segment=(path.name,began,ended,data)
-    ring.append(segment);seen.add(path.name);last_frame=now
+    if active and not can_append(active,segment):finish(continued=True)
+    ring.append(segment);trim_ring(ring,now,PRE);seen.add(path.name);last_frame=now
     if active and path.name>active['last']:
-     active['file'].write(data);active['end']=ended;active['last']=path.name
+     active['file'].write(data);active['end']=ended;active['last']=path.name;active['bytes']+=len(data)
     path.unlink()
-   while ring and ring[0][2]<now-PRE-2:ring.popleft()
+   trim_ring(ring,now,PRE)
    # Bound bookkeeping independently of runtime length.
    if len(seen)>100:seen={s[0] for s in ring}
    if now-last_frame>12:raise RuntimeError('Camera stopped producing frames')
@@ -116,7 +122,7 @@ def main():
     test.unlink();active=begin(now,'test');last_motion=now
    if not active and motion and not blocked:active=begin(now)
    if active:
-    if active['end']-active['start']>=MAX:
+    if deadline_reached(active,now):
      finish(continued=motion or now-last_motion<POST)
      if not blocked and (motion or now-last_motion<POST):active=begin(now)
     elif not motion and active['end']>=last_motion+POST:finish()
