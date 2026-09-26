@@ -116,8 +116,9 @@ def main():
    if not touch.matrix and not touch.error:
     im=Image.new('RGB',(480,320),'#111a20');d=ImageDraw.Draw(im)
     d.text((70,100),'Touch calibration',font=font(22),fill='#e6c699')
-    d.text((55,135),'Tap and release the cross carefully',font=font(17),fill='white')
+    d.text((55,135),'Tap once, then wait for the next cross',font=font(17),fill='white')
     d.text((130,185),f'Step {len(touch.points)+1} of 4',font=font(16),fill='#a5b1b7')
+    if touch.feedback:d.text((35,215),touch.feedback,font=font(13),fill='#ffb27d')
     x,y=TARGETS[len(touch.points)] if len(touch.points)<3 else CHECK
     d.ellipse((x-13,y-13,x+13,y+13),outline='#e6c699',width=2)
     d.line((x-20,y,x+20,y),fill='white',width=2);d.line((x,y-20,x,y+20),fill='white',width=2)
@@ -129,9 +130,12 @@ def main():
    pixels=bytearray()
    for r,g,b in im.getdata():pixels.extend(struct.pack('<H',((r>>3)<<11)|((g>>2)<<5)|(b>>3)))
    with open('/dev/'+fb.name,'r+b',buffering=0) as output:output.write(pixels)
+   # At 1 MHz a full LCD SPI transfer takes about 2.5 seconds after the write.
+   # Do not accept a tap against the preceding target while the panel catches up.
+   if not touch.matrix or confirm:time.sleep(3)
    # Ignore taps made before the newly drawn confirmation/calibration screen was visible.
    while not events.empty():events.get_nowait()
-   next_refresh=time.monotonic()+10
+   next_refresh=time.monotonic()+10 if touch.matrix else float('inf')
   try:point=events.get(timeout=0.2)
   except queue.Empty:continue
   if not touch.matrix:

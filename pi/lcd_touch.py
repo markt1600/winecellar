@@ -21,7 +21,7 @@ def calibrate(points):
 
 class Touch:
  def __init__(self,queue,path):
-  self.queue=queue;self.path=path;self.matrix=None;self.points=[];self.error=None
+  self.queue=queue;self.path=path;self.matrix=None;self.points=[];self.error=None;self.feedback=None
   try:
    matrix=json.loads(path.read_text())
    if len(matrix)==6 and all(isinstance(v,(int,float)) for v in matrix):self.matrix=matrix
@@ -50,15 +50,21 @@ class Touch:
   except OSError:logging.exception('Touch input stopped')
   finally:os.close(self.fd)
  def calibration_tap(self,point):
+  trace=self.path.with_name('touch-calibration-debug.json')
+  try:trace.write_text(json.dumps(dict(points=self.points,check=point,step=len(self.points)+1)))
+  except OSError:pass
   if len(self.points)<3:
    self.points.append(point);return False
   try:
    matrix=calibrate(self.points);x,y=transform(matrix,*point)
-   if abs(x-CHECK[0])>35 or abs(y-CHECK[1])>35:raise ValueError('Check missed')
+   trace.write_text(json.dumps(dict(points=self.points,check=point,mapped=[x,y])))
+   if abs(x-CHECK[0])>35 or abs(y-CHECK[1])>35:
+    self.feedback='Check missed. Tap the centre cross again.';return False
    self.path.parent.mkdir(parents=True,exist_ok=True)
    temp=self.path.with_suffix('.tmp');temp.write_text(json.dumps(matrix));temp.replace(self.path)
    self.matrix=matrix;return True
-  except (ValueError,OSError):self.points=[];return False
+  except ValueError:self.points=[];self.feedback='Touches overlapped. Try the crosses slowly.';return False
+  except OSError:self.error='Cannot save calibration';return False
 
 def hit(x,y):
  if not 215<=y<=319:return None
