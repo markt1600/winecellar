@@ -12,7 +12,7 @@ export async function GET(){
     if(session&&data.monitoringSession?.id!==session.id)return Response.json({empty:true,resetPending:true,monitoringSession:session},{headers});
     // Expose only basic camera health; recordings and upload identifiers remain private.
     const {camera,cameraUpload,...environment}=data;
-    const states=['watching','recording','storage_full','stopped'];
+    const states=['watching','recording','storage_full','stopped','paused'];
     const cameraHealth=camera?{lastMotionAt:Number.isFinite(Date.parse(camera.lastMotionAt))?camera.lastMotionAt:null,observedAt:camera.observedAt,state:states.includes(camera.state)?camera.state:'unavailable',queuedClips:Number.isSafeInteger(camera.queuedClips)&&camera.queuedClips>=0?camera.queuedClips:null}:null;
     return Response.json({...environment,cameraHealth},{headers});
   }catch{return Response.json({error:'Readings are temporarily unavailable.'},{status:503,headers});}
