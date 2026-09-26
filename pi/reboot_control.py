@@ -6,8 +6,10 @@ from upload import send
 ROOT=Path.home()/'winecellar'
 STATE=ROOT/'data/reboot-handled.json'
 HELPER='/usr/local/sbin/winecellar-reboot'
+SHUTDOWN_HELPER='/usr/local/sbin/winecellar-shutdown'
 URL='https://winecellar.marktan.ai/api/reboot/device'
 def eligible(command,handled,boot_id,now=None):
+ if command and command.get('action','reboot') not in ('reboot','shutdown'):return False
  if not command or command.get('status')!='queued' or command.get('bootId')!=boot_id:return False
  if handled and handled.get('id')==command.get('id'):return False
  return datetime.fromisoformat(command['expiresAt'].replace('Z','+00:00'))>(now or datetime.now(timezone.utc))
@@ -28,13 +30,19 @@ def run():
  while True:
   try:
    ready=Path(HELPER).exists() and subprocess.run(['/usr/bin/sudo','-n','-l',HELPER],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL).returncode==0
-   command=send(dict(bootId=boot,ready=ready,handled=handled),URL).get('command')
-   if ready and eligible(command,handled,boot):
+   shutdown_ready=Path(SHUTDOWN_HELPER).exists() and subprocess.run(['/usr/bin/sudo','-n','-l',SHUTDOWN_HELPER],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL).returncode==0
+   command=send(dict(bootId=boot,ready=ready,shutdownReady=shutdown_ready,handled=handled),URL).get('command')
+   if ready and eligible(command,handled,boot) and (command.get('action')!='shutdown' or shutdown_ready):
     # Persist before invoking the helper: the same request can never trigger a reboot loop.
     handled=dict(id=command['id'],status='accepted');persist(handled)
-    result=subprocess.run(['/usr/bin/sudo','-n',HELPER],capture_output=True,timeout=15)
+    helper=SHUTDOWN_HELPER if command.get('action')=='shutdown' else HELPER
+    if command.get('action')=='shutdown':
+     handled['status']='scheduled';persist(handled)
+     try:send(dict(bootId=boot,ready=ready,shutdownReady=shutdown_ready,handled=handled),URL)
+     except Exception:logging.warning('Shutdown acknowledgement unavailable; executing authorized request')
+    result=subprocess.run(['/usr/bin/sudo','-n',helper],capture_output=True,timeout=15)
     handled['status']='scheduled' if result.returncode==0 else 'failed';persist(handled)
-    send(dict(bootId=boot,ready=ready,handled=handled),URL)
+    send(dict(bootId=boot,ready=ready,shutdownReady=shutdown_ready,handled=handled),URL)
   except Exception as e:logging.warning('Reboot control delayed (%s)',type(e).__name__)
   time.sleep(15)
 if __name__=='__main__':run()
