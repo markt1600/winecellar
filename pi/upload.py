@@ -13,6 +13,7 @@ import urllib.request
 from datetime import datetime, timezone
 from snapshot import snapshot
 from wifi_status import wifi_status
+from board_temperature import board_temperature
 
 ROOT=Path.home()/'winecellar'
 DATA=ROOT/'data'
@@ -80,6 +81,7 @@ def run():
                     state.execute('INSERT OR REPLACE INTO uploaded VALUES (?,?)',(hour,last_id))
             if payload:
                 payload['wifi']=wifi_status()
+                payload['piBoard']=board_temperature()
                 send(payload)
                 status=dict(last_success=datetime.now(timezone.utc).isoformat(),uploaded_through=payload['latest']['observed_at'])
                 temp=DATA/'upload-status.tmp'
