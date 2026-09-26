@@ -11,6 +11,7 @@ from datetime import datetime, timezone
 
 import adafruit_dht
 import board
+from hardware_access import hardware_access
 
 ROOT = Path.home() / 'winecellar'
 DATA = ROOT / 'data'
@@ -60,25 +61,26 @@ def main():
             started = time.monotonic()
             bottle = ambient = humidity = None
             bottle_error = ambient_error = None
-            try:
-                bottle = read_bottle()
-            except (OSError, ValueError, IndexError) as exc:
-                bottle_error = str(exc)
-            # Retry transient DHT timing/checksum errors without reusing stale values.
-            for attempt in range(2):
+            with hardware_access('sensors'):
                 try:
-                    t, h = sensor.temperature, sensor.humidity
-                    if t is None or h is None or not all(math.isfinite(v) for v in (t, h)):
-                        raise ValueError('Missing or non-finite DHT reading')
-                    if not -40 <= t <= 80 or not 0 <= h <= 100:
-                        raise ValueError('DHT reading outside sensor range')
-                    ambient, humidity = t, h
-                    ambient_error = None
-                    break
-                except (RuntimeError, OSError, ValueError) as exc:
-                    ambient_error = str(exc)
-                    if attempt == 0:
-                        time.sleep(2.5)
+                    bottle = read_bottle()
+                except (OSError, ValueError, IndexError) as exc:
+                    bottle_error = str(exc)
+                # Retry transient DHT timing/checksum errors without reusing stale values.
+                for attempt in range(2):
+                    try:
+                        t, h = sensor.temperature, sensor.humidity
+                        if t is None or h is None or not all(math.isfinite(v) for v in (t, h)):
+                            raise ValueError('Missing or non-finite DHT reading')
+                        if not -40 <= t <= 80 or not 0 <= h <= 100:
+                            raise ValueError('DHT reading outside sensor range')
+                        ambient, humidity = t, h
+                        ambient_error = None
+                        break
+                    except (RuntimeError, OSError, ValueError) as exc:
+                        ambient_error = str(exc)
+                        if attempt == 0:
+                            time.sleep(2.5)
             timestamp = datetime.now(timezone.utc).isoformat(timespec='milliseconds')
             with conn:
                 conn.execute('''INSERT INTO readings

@@ -4,6 +4,7 @@ from pathlib import Path
 from datetime import datetime,timezone,timedelta
 from PIL import Image,ImageDraw,ImageFont,ImageEnhance
 from snapshot import statistics,iso,previous_month
+from hardware_access import hardware_access,LCD_DRAIN_SECONDS
 from lcd_touch import Touch,transform,hit,TARGETS,CHECK
 PERIODS=("1h","24h","1mo","1y")
 LABELS={"1h":"1H","24h":"24H","1mo":"1 MONTH","1y":"1 YEAR"}
@@ -142,10 +143,8 @@ def main():
    if dim and touch.matrix and not confirm and not notice:im=ImageEnhance.Brightness(im).enhance(0.30)
    pixels=bytearray()
    for r,g,b in im.getdata():pixels.extend(struct.pack('<H',((r>>3)<<11)|((g>>2)<<5)|(b>>3)))
-   with open('/dev/'+fb.name,'r+b',buffering=0) as output:output.write(pixels)
-   # At 1 MHz a full LCD SPI transfer takes about 2.5 seconds after the write.
-   # Do not accept a tap against the preceding target while the panel catches up.
-   if not touch.matrix or confirm:time.sleep(3)
+   with hardware_access('lcd',drain_seconds=LCD_DRAIN_SECONDS):
+    with open('/dev/'+fb.name,'r+b',buffering=0) as output:output.write(pixels)
    # Ignore taps made before the newly drawn confirmation/calibration screen was visible.
    while not events.empty():events.get_nowait()
    next_refresh=time.monotonic()+10 if touch.matrix else float('inf')
