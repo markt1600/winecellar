@@ -77,6 +77,17 @@ def period_start(now,period):
  if period=='1mo':return previous_month(now)
  return now.replace(year=now.year-1,day=min(now.day,calendar.monthrange(now.year-1,now.month)[1]))
 
+def dim_schedule(now=None):
+ # Singapore is UTC+08:00 year-round; independent of the Pi's configured timezone.
+ local=(now or datetime.now(timezone.utc)).astimezone(timezone(timedelta(hours=8)))
+ night=local.hour>=22 or local.hour<7
+ day=(local-timedelta(days=1)).date() if local.hour<7 else local.date()
+ return night,f'{day.isoformat()}:{"night" if night else "day"}'
+
+def effective_dim(saved,now=None):
+ scheduled,window=dim_schedule(now)
+ return (saved.get('dim') is True) if saved.get('dimOverrideWindow')==window else scheduled
+
 def controls(im,period,dim):
  d=ImageDraw.Draw(im)
  # Small paper labels replace only the three selected bottles' labels.
@@ -105,10 +116,12 @@ def main():
  settings=DATA/'lcd-controls.json'
  try:saved=json.loads(settings.read_text())
  except (OSError,ValueError):saved={}
- period=saved.get('period','24h');period=period if period in PERIODS else '24h';dim=saved.get('dim') is True
+ period=saved.get('period','24h');period=period if period in PERIODS else '24h';dim=effective_dim(saved)
  confirm=False;confirm_until=0;notice='';notice_until=0;next_refresh=0
  while True:
   now=time.monotonic()
+  scheduled_dim=effective_dim(saved)
+  if scheduled_dim!=dim:dim=scheduled_dim;next_refresh=0
   if confirm and now>confirm_until:confirm=False;next_refresh=0
   if notice and now>notice_until:notice='';next_refresh=0
   if now>=next_refresh:
@@ -154,11 +167,13 @@ def main():
   if notice:continue
   action=hit(x,y)
   if action=='reboot':confirm=True;confirm_until=time.monotonic()+30
-  elif action=='dim':dim=not dim
+  elif action=='dim':
+   dim=not dim;saved.update(dim=dim,dimOverrideWindow=dim_schedule()[1])
   elif action=='period':period=PERIODS[(PERIODS.index(period)+1)%len(PERIODS)]
   else:continue
   if action in ('dim','period'):
    settings.parent.mkdir(parents=True,exist_ok=True)
-   temp=settings.with_suffix('.tmp');temp.write_text(json.dumps(dict(period=period,dim=dim)));temp.replace(settings)
+   saved['period']=period
+   temp=settings.with_suffix('.tmp');temp.write_text(json.dumps(saved));temp.replace(settings)
   next_refresh=0
 if __name__=='__main__':main()
