@@ -20,7 +20,7 @@ DATA=ROOT/'data'
 URL='https://winecellar.marktan.ai/api/ingest'
 
 
-def send(payload,url=URL):
+def send(payload,url=URL,timeout=70):
     body=json.dumps(payload,separators=(',',':'),allow_nan=False).encode()
     stamp=str(int(time.time()*1000))
     # OpenSSL Ed25519 signing needs a seekable input; the temporary file holds readings, not a key.
@@ -32,7 +32,7 @@ def send(payload,url=URL):
     request=urllib.request.Request(url,data=body,method='POST',headers={
         'Content-Type':'application/json','X-Cellar-Time':stamp,
         'X-Cellar-Signature':base64.b64encode(signature).decode()})
-    with urllib.request.urlopen(request,timeout=70) as response:
+    with urllib.request.urlopen(request,timeout=timeout) as response:
         result=json.load(response)
         if response.status!=200 or result.get('ok') is not True:
             raise RuntimeError('Upload not acknowledged')

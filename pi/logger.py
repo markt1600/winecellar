@@ -56,6 +56,7 @@ def main():
     signal.signal(signal.SIGTERM, stop)
     signal.signal(signal.SIGINT, stop)
     logging.info('Logging every %ss to %s', INTERVAL, DATA / 'readings.sqlite3')
+    previous_errors = (None, None)
     try:
         while running:
             started = time.monotonic()
@@ -93,6 +94,17 @@ def main():
             temporary = DATA / 'status.tmp'
             temporary.write_text(json.dumps(status, indent=2) + '\n')
             os.replace(temporary, DATA / 'status.json')
+            errors = (bottle_error, ambient_error)
+            if errors != previous_errors:
+                # Lightweight persistent trigger; heavy diagnostics run separately.
+                try:
+                    event = dict(observed_at=timestamp, before=previous_errors, after=errors)
+                    temporary = DATA / 'sensor-event.tmp'
+                    temporary.write_text(json.dumps(event))
+                    os.replace(temporary, DATA / 'sensor-event.json')
+                except OSError:
+                    logging.warning('Unable to persist sensor diagnostic trigger')
+                previous_errors = errors
             if bottle_error or ambient_error:
                 logging.warning('Sensor error: bottle=%s ambient=%s', bottle_error, ambient_error)
             remaining = max(0, INTERVAL - (time.monotonic() - started))

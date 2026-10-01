@@ -1,0 +1,15 @@
+[Unit]
+Description=Wine cellar persistent diagnostic black box
+After=winecellar-logger.service
+StartLimitIntervalSec=0
+
+[Service]
+WorkingDirectory=%h/winecellar
+ExecStart=%h/winecellar/.venv/bin/python -u %h/winecellar/diagnostics.py
+Restart=on-failure
+RestartSec=15
+UMask=0077
+Nice=10
+
+[Install]
+WantedBy=default.target
