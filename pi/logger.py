@@ -15,7 +15,7 @@ from hardware_access import hardware_access
 
 ROOT = Path.home() / 'winecellar'
 DATA = ROOT / 'data'
-PROBE = Path('/sys/bus/w1/devices/28-06900087a696/w1_slave')
+PROBE = Path('/sys/bus/w1/devices/28-2e470087136b/w1_slave')
 INTERVAL = 10
 running = True
 
