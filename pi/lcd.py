@@ -23,14 +23,23 @@ def draw_dashboard(row, day, alltime, session=None, now=None, period="24h", fail
  text(12,7,'Cellar @ BH',17,'#e6c699')
  stamp=now.astimezone().strftime('%d %b  %H:%M')
  text(480-12-d.textlength(stamp,font=font(13)),10,stamp,13,'#a5b1b7')
+ # Compact two-line Wi-Fi status fits between the title and clock.
+ left=12+d.textlength('Cellar @ BH',font=font(17))+10
+ right=468-d.textlength(stamp,font=font(13))-10
+ middle=(left+right)/2
+ connected=wifi and wifi.get('state')=='connected'
+ label=wifi_label(wifi).split(' | ')[0].replace('Wi-Fi: Connected','Wi-Fi').replace('Wi-Fi: Status unavailable','Wi-Fi: Unknown')
+ size=10
+ while size>8 and d.textlength(label,font=font(size))>right-left:size-=1
+ center(middle,3 if connected else 10,label,size,'#9bd6b0' if connected else '#ffb27d')
+ if connected:
+  name=wifi.get('ssid','')
+  while d.textlength(name,font=font(9))>right-left:name=name[:-2]+'…'
+  center(middle,18,name,9,'#a5b1b7')
  d.line((12,32,468,32),fill='#4b493d')
  # The photographic asset is cached and resized once, not processed every refresh.
  art=bottle_art()
  if art:im.paste(art,((480-art.width)//2,320-art.height))
- d.rectangle((0,196,480,215),fill='#111a20')
- label=wifi_label(wifi)
- while d.textlength(label,font=font(11))>456:label=label[:-2]+'…'
- text(12,198,label,11,'#9bd6b0' if wifi and wifi.get('state')=='connected' else '#ffb27d')
  if row is None:
   center(240,80,'Waiting for new readings',21)
   center(240,118,'Monitoring starts with the next sample',13,'#a5b1b7')
