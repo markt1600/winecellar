@@ -59,7 +59,8 @@ def capture(reason,history):
         serviceLogs={s:command(['journalctl',f'_SYSTEMD_USER_UNIT=winecellar-{s}.service','--since','-10min','-n','40','--no-pager','-o','short-iso'],6000) for s in SERVICES},
         kernel=command(['journalctl','-k','--since','-10min','-n','60','--no-pager'],10000),
         networkLogs=command(['journalctl','-u','NetworkManager','--since','-10min','-n','40','--no-pager'],6000),
-        ioTrace=read(Path(f'/run/user/{os.getuid()}/winecellar-io/recent.json')))
+        ioTrace=read(Path(f'/run/user/{os.getuid()}/winecellar-io/recent.json')),
+        wifiRecovery=read(Path('/var/lib/winecellar-wifi-recovery/events.json')))
     # Never let unexpectedly large status files create unbounded reports.
     while len(json.dumps(report).encode())>450000 and len(report['history'])>1:
         report['history']=report['history'][1:]
