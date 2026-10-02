@@ -1,5 +1,5 @@
 """Read active Wi-Fi status without rescanning or exposing network credentials."""
-import os,subprocess
+import os,subprocess,json
 from pathlib import Path
 from datetime import datetime,timezone
 
@@ -20,8 +20,20 @@ def active_network(output):
   return dict(ssid=''.join(chars),signalPercent=signal)
  return None
 
+def recovery_status(directory=Path('/var/lib/winecellar-wifi-recovery')):
+ try:
+  events=json.loads((directory/'events.json').read_text())
+  triggers=[e for e in events if e.get('action') in ('radio_reset','driver_reload')]
+  if not triggers:return dict(state='no_recorded_trigger')
+  last=triggers[-1]
+  recovered=next((e['at'] for e in reversed(events) if e.get('action')=='recovered' and e['at']>=last['at']),None)
+  return dict(state='triggered',action=last['action'],triggeredAt=last['at'],recoveredAt=recovered)
+ except FileNotFoundError:
+  return dict(state='no_recorded_trigger' if (directory/'state.json').exists() else 'unavailable')
+ except (OSError,ValueError,TypeError,KeyError,AttributeError):return dict(state='unavailable')
+
 def wifi_status():
- result=dict(observedAt=datetime.now(timezone.utc).isoformat(),state='unavailable')
+ result=dict(observedAt=datetime.now(timezone.utc).isoformat(),state='unavailable',recovery=recovery_status())
  try:
   output=subprocess.check_output(['/usr/bin/nmcli','-t','-e','yes','-f','IN-USE,SSID,SIGNAL','device','wifi','list','ifname','wlan0','--rescan','no'],text=True,timeout=3,stderr=subprocess.DEVNULL,env={**os.environ,'LC_ALL':'C'})
   active=active_network(output)
