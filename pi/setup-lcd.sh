@@ -13,7 +13,7 @@ if ! grep -q '^dtoverlay=winecellar35c' "$config"; then
 # Wine cellar SPI LCD, conservative clock for jumper wiring
 [all]
 dtparam=spi=on
-dtoverlay=winecellar35c,speed=8000000,rotate=90,fps=10
+dtoverlay=winecellar35c,speed=1000000,rotate=90,fps=10
 EOF
 fi
 printf '%s\n' 'LCD configuration installed. Reboot with: sudo reboot'

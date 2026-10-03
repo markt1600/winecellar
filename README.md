@@ -1,6 +1,10 @@
-# The Cellar
+# Cellar @ BH
 
 Environmental journal at https://winecellar.marktan.ai. Raspberry Pi Zero 2 W reads a DS18B20 on GPIO4 and a DHT22 on GPIO22. Motion video stays in private storage. No face detection or extraction is performed.
+
+## Install or restore a Pi
+
+See [the fresh-Pi installation guide](docs/FRESH-PI.md). It covers dependencies, sensor IDs, the working LCD overlay, camera, signed uploads, touch calibration, diagnostics, Wi-Fi recovery and private backups. The repository is not a full SD-card image; keys, readings, recordings and machine configuration are intentionally excluded.
 
 ## Running system
 
@@ -12,7 +16,7 @@ User systemd services `winecellar-logger` and `winecellar-upload` start with use
 
 ## Cloud storage
 
-The uploader runs once a minute. It stores raw readings in per-hour JSON objects under `cellar/v1/readings/` and a bounded dashboard snapshot at `cellar/v1/dashboard.json` in the connected **private** Vercel Blob store. Hour archives are acknowledged individually and resumable; retries do not create duplicate objects. The Pi keeps all original readings. Historical charts and selected-period min/max/mean values are calculated from local data. No cloud deletion is implemented.
+The uploader runs once a minute. It stores raw readings in per-hour JSON objects under `cellar/v1/readings/` and a bounded dashboard snapshot at `cellar/v1/dashboard.json` in the connected **private** Vercel Blob store. Hour archives are acknowledged individually and resumable; retries do not create duplicate objects. The Pi keeps all original readings. Historical charts and selected-period min/max/mean values are calculated from local data. Environmental archives are retained; separate retention limits apply to camera clips and diagnostic reports.
 
 The Pi signs each upload using Ed25519. Its private key lives only in `~/winecellar/keys/upload.pem`, mode 600, and is not the SSH key. The matching public key is in `lib/ingestion.mjs`. The server verifies the signature, five-minute request timestamp window, size and schema before writing. Hour identifiers cannot select arbitrary paths. Blob credentials remain in Vercel. Reimaging requires restoring the database and device key or registering a replacement public key.
 
@@ -22,7 +26,7 @@ The Pi signs each upload using Ed25519. Its private key lives only in `~/winecel
 
 Current bottle/ambient temperature and humidity; rolling 24h and all-time extremes; selectable 1h, 24h, one calendar month and one calendar year; exact selected-period extremes/times and sample means. Charts use 10s, 120s, 1h and 1-day buckets respectively, retaining min/max whiskers. The CSV exports these chart buckets (not every raw sample). Charts do not interpolate missing buckets; a partially populated bucket averages only its valid readings. Humidity is separate from temperature. Estimated dew point and bottle-air difference are shown. Configurable display ranges are browser-local illustrative values, not alerts or storage advice. Historical data accrues from installation onward; missing history is never fabricated.
 
-LCD rendering, alerts and richer duration-based excursion analysis remain later integration stages. Raw sensor data is preserved to support them.
+The LCD dashboard includes bottle artwork, touch controls, Wi-Fi status and hourly failed-reading counts. Raw sensor data is preserved. Duration-based excursion alerts are not implemented.
 
 ## Development
 
@@ -36,7 +40,7 @@ Install `ffmpeg` from Raspberry Pi OS apt. The recorder uses the already-install
 
 `winecellar-clips.service` packages with FFmpeg stream copy (no video re-encoding) and uploads signed binary envelopes. The server stores immutable MP4 and metadata objects in private Blob; it verifies the same device signature as sensor uploads. Video listing and playback require the shared owner login, and byte ranges are streamed through the authenticated server. Videos are not stored in GitHub. Cloud storage keeps the newest 10 recordings (including setup tests); each acknowledged upload removes older MP4s and their event metadata. The Pi spool retains at most the newest 10 completed pending clips. Older pending clips are discarded even if not uploaded; active footage is preserved. Upload preparation copies a clip under the shared queue lock so pruning cannot race its encoding. Camera health (state, queue count and update time only) is public; recordings and clip metadata remain owner-only.
 
-Local queue: `~/winecellar/camera/spool`. Pending footage is retained across upload outages; local files are removed only after a durable server acknowledgement. At 512 MiB of spool or under 1 GiB disk free, new event recording pauses so temperature logging retains space. Camera capture stops at 78 C Pi temperature and systemd retries later. Services run at lower priority with CPU and memory caps. Interrupted partial clips are not presented as complete footage.
+Local queue: `~/winecellar/camera/spool`. Pending footage is retained across upload outages within the newest-10 limit; older pending clips can be pruned before upload. At 512 MiB of spool or under 1 GiB disk free, new event recording pauses so temperature logging retains space. Camera capture stops at 78 C Pi temperature and systemd retries later. Services run at lower priority with CPU and memory caps. Interrupted partial clips are not presented as complete footage.
 
 Install both user service files, then `systemctl --user daemon-reload` and `systemctl --user enable --now winecellar-camera winecellar-clips`. Stop with `systemctl --user stop winecellar-camera winecellar-clips`. `data/camera-status.json` and `data/camera-upload-status.json` report capture/queue/cloud health, and sensor snapshots carry these statuses to the dashboard.
 
@@ -45,7 +49,7 @@ A software-triggered setup clip can be requested with `touch ~/winecellar/camera
 
 ## Public readings and monitoring periods
 
-The homepage and `/api/readings` expose environmental readings without login. Camera status, event listing, video playback and monitoring reset endpoints still require the shared Google owner session. Camera metadata is stripped from the environmental endpoint. Anonymous visitors see a camera login panel rather than recordings.
+The homepage and `/api/readings` expose environmental readings without login. Detailed camera status, event listing, video playback and monitoring reset endpoints require the shared Google owner session; basic camera health is public. Camera metadata is stripped from the environmental endpoint. Anonymous visitors see a camera login panel rather than recordings.
 
 The owner-only control at the bottom of the page starts a new monitoring period, optionally named for a location (the name is public). It requires explicit confirmation, owner authentication and the production same-origin header. The reset writes a private Blob boundary; the signed Pi uploader polls it every minute and computes charts, rolling extrema and period extrema only from readings at or after that boundary. Raw SQLite readings and hourly archives are preserved. Older history is retained but not selectable in this initial period-reset UI. Video collection is independent.
 
